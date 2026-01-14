@@ -49,7 +49,6 @@ class QuantumultX extends AbstractProtocol
             ->header('content-type', 'text/plain')
             ->header('subscription-userinfo', "upload={$user['u']}; download={$user['d']}; total={$user['transfer_enable']}; expire={$user['expired_at']}");
     }
-    #判断版本,只有当版本大于1.5.5时,才支持VLESS协议
     public static function buildShadowsocks($password, $server)
     {
         $protocol_settings = $server['protocol_settings'];
