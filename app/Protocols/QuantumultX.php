@@ -4,7 +4,6 @@ namespace App\Protocols;
 
 use App\Support\AbstractProtocol;
 use App\Models\Server;
-
 class QuantumultX extends AbstractProtocol
 {
     public $flags = ['quantumult%20x', 'quantumult-x'];
@@ -12,8 +11,21 @@ class QuantumultX extends AbstractProtocol
         Server::TYPE_SHADOWSOCKS,
         Server::TYPE_VMESS,
         Server::TYPE_TROJAN,
+        Server::TYPE_VLESS,
     ];
-
+    protected $protocolRequirements = [
+        'quantumult-x' => [
+            'vless' => [
+                'base_version' => '1.5.0',
+                'protocol_settings.flow' => [
+                    'xtls-rprx-vision' => '1.5.5'
+                ],
+                'protocol_settings.tls' => [
+                    '2' => '1.5.5' // Reality
+                ]
+            ]
+        ]
+    ];
     public function handle()
     {
         $servers = $this->servers;
@@ -29,12 +41,15 @@ class QuantumultX extends AbstractProtocol
             if ($item['type'] === Server::TYPE_TROJAN) {
                 $uri .= self::buildTrojan($item['password'], $item);
             }
+            if ($item['type'] === Server::TYPE_VLESS) {
+                $uri .= self::buildVless($item['password'], $item);
+            }
         }
         return response(base64_encode($uri))
             ->header('content-type', 'text/plain')
             ->header('subscription-userinfo', "upload={$user['u']}; download={$user['d']}; total={$user['transfer_enable']}; expire={$user['expired_at']}");
     }
-
+    #判断版本,只有当版本大于1.5.5时,才支持VLESS协议
     public static function buildShadowsocks($password, $server)
     {
         $protocol_settings = $server['protocol_settings'];
@@ -136,6 +151,88 @@ class QuantumultX extends AbstractProtocol
             "tag={$server['name']}"
         ];
         $config = array_filter($config);
+        $uri = implode(',', $config);
+        $uri .= "\r\n";
+        return $uri;
+    }
+    public static function buildVless($uuid, $server)
+    {
+        $protocol_settings = $server['protocol_settings'];
+        $config = [
+            "vless={$server['host']}:{$server['port']}",
+            "method=none",
+            "password={$uuid}",
+            'fast-open=true',
+            'udp-relay=true',
+            "tag={$server['name']}"
+        ];
+        //flow
+        if (data_get($protocol_settings, 'flow')) {
+            array_push($config, "vless-flow={$protocol_settings['flow']}");
+        }
+        // TLS/Reality
+        switch (data_get($protocol_settings, 'tls')) {
+            case 1:
+                switch (data_get($protocol_settings, 'network')) {
+                    case 'tcp':
+                        array_push($config, 'obfs=over-tls');
+                        break;
+                    case 'ws':
+                        array_push($config, 'obfs=wss');
+                        if ($path = data_get($protocol_settings, 'network_settings.path')) {
+                            array_push($config, "obfs-uri={$path}");
+                        }
+                        break;
+                }
+                if ($serverName = data_get($protocol_settings, 'tls_settings.server_name')) {
+                    array_push($config, "obfs-host={$serverName}");
+                }
+                break;
+            case 2:
+                switch (data_get($protocol_settings, 'network')) {
+                    case 'tcp':
+                        array_push($config, 'obfs=over-tls');
+                        break;
+                    case 'ws':
+                        array_push($config, 'obfs=wss');
+                        if ($path = data_get($protocol_settings, 'network_settings.path')) {
+                            array_push($config, "obfs-uri={$path}");
+                        }
+                        break;
+                }
+                if ($serverName = data_get($protocol_settings, 'reality_settings.server_name')) {
+                    array_push($config, "obfs-host={$serverName}");
+                }
+                if ($pubkey = data_get($protocol_settings, 'reality_settings.public_key')) {
+                    array_push($config, "reality-base64-pubkey={$pubkey}");
+                }
+                if ($shortid = data_get($protocol_settings, 'reality_settings.short_id')) {
+                    array_push($config, "reality-hex-shortid={$shortid}");
+                }
+                break;
+            default:
+                switch (data_get($protocol_settings, 'network')) {
+                    case 'http':
+                        array_push($config, 'obfs=http');
+                        if ($path = data_get($protocol_settings, 'network_settings.path')) {
+                            array_push($config,"obfs-uri={$path}");
+                        }
+                        if ($host = data_get($protocol_settings, 'network_settings.host', $server['host'])) {
+                            array_push($config,"obfs-host={$host}");
+                        }
+                        break;
+                    case 'ws':
+                        array_push($config, 'obfs=ws');
+                        if ($path = data_get($protocol_settings, 'network_settings.path')) {
+                            array_push($config,"obfs-uri={$path}");
+                        }
+                        if ($host = data_get($protocol_settings, 'network_settings.host', $server['host'])) {
+                            array_push($config,"obfs-host={$host}");
+                        }
+                        break;
+                }
+                break;
+        }
         $uri = implode(',', $config);
         $uri .= "\r\n";
         return $uri;
