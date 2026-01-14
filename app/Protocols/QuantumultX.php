@@ -24,6 +24,17 @@ class QuantumultX extends AbstractProtocol
                     '2' => '1.5.5' // Reality
                 ]
             ]
+        ],
+        'quantumult%20x' => [
+            'vless' => [
+                'base_version' => '1.5.0',
+                'protocol_settings.flow' => [
+                    'xtls-rprx-vision' => '1.5.5'
+                ],
+                'protocol_settings.tls' => [
+                    '2' => '1.5.5' // Reality
+                ]
+            ]
         ]
     ];
     public function handle()
